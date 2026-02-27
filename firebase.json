@@ -1,0 +1,42 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "waste-management-app-4de40",
+          "appId": "1:505201158498:android:35691d14cef6eb9b29e43b",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "waste-management-app-4de40",
+          "configurations": {
+            "android": "1:505201158498:android:35691d14cef6eb9b29e43b",
+            "ios": "1:505201158498:ios:3f36a862770ab52329e43b",
+            "macos": "1:505201158498:ios:3f36a862770ab52329e43b",
+            "web": "1:505201158498:web:252487950cdd733b29e43b",
+            "windows": "1:505201158498:web:af96906a8d3d2c8329e43b"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ]
+    }
+  ]
+}

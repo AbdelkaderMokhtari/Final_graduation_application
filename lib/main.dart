@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firebase_options.dart';
 
 // Screens
+import 'screens/welcome_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/administration/administration_dashboard.dart';
@@ -27,14 +28,23 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: AuthWrapper(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeModeNotifier,
+      builder: (_, mode, __) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        themeMode: mode,
+        theme: ThemeData.light(useMaterial3: true),
+        darkTheme: ThemeData.dark(useMaterial3: true),
+        home: const WelcomeScreen(),
+        routes: {
+          '/home': (context) => const AuthWrapper(),
+        },
+      ),
     );
   }
 }
 
-/// 🔥 النظام الذكي لتحديد الصفحة
+/// 🔥 النظام الذكي لتحديد الصفحة حسب الدور
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
@@ -43,21 +53,18 @@ class AuthWrapper extends StatelessWidget {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // ⏳ تحميل
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // 👤 لا يوجد مستخدم → شاشة المواطن (وليس Login)
         if (!snapshot.hasData) {
           return const CitizenScreen();
         }
 
         final user = snapshot.data!;
 
-        // 🔎 جلب الدور من Firestore
         return FutureBuilder<DocumentSnapshot>(
           future: FirebaseFirestore.instance
               .collection('users')
@@ -82,17 +89,13 @@ class AuthWrapper extends StatelessWidget {
 
             final role = data['role'];
 
-            /// 🔀 تحويل حسب الدور
             switch (role) {
               case 'admin':
                 return const AdminDashboard();
-
               case 'administration':
                 return const AdministrationDashboard();
-
               case 'worker':
                 return const WorkerScreen();
-
               default:
                 return const CitizenScreen();
             }

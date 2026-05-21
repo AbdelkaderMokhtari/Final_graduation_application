@@ -1,6 +1,27 @@
+// welcome_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'citizen_screen.dart';
+import 'settings_manager.dart';
+import 'homescreen.dart';
+import 'settings_manager.dart';
+
+// ─────────────────────────────────────────────
+// 🎨 Design Tokens
+// ─────────────────────────────────────────────
+class _C {
+  static const navy = Color(0xFF0A1628);
+  static const navyMid = Color(0xFF0F2044);
+  static const blue = Color(0xFF1E6FFF);
+  static const blueSoft = Color(0xFF4A90E2);
+  static const accent = Color(0xFF00E5FF);
+  static const orange = Color(0xFFFF8C42);
+  static const green = Color(0xFF00D68F);
+  static const card = Color(0xFF162040);
+  static const card2 = Color(0xFF1A2848);
+  static const divider = Color(0xFF1E2E50);
+  static const textPrimary = Color(0xFFE8F0FF);
+  static const textSub = Color(0xFF8899BB);
+}
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -14,114 +35,115 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   int totalReports = 0;
   int solvedReports = 0;
   int activeWorkers = 0;
-  bool isLoading = true;
+  bool _statsLoaded = false;
 
-  late AnimationController _fadeController;
-  late AnimationController _slideController;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
+  late AnimationController _bgCtrl;
+  late AnimationController _contentCtrl;
+  late Animation<double> _bgAnim;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
+  String tr(String k) => SettingsManager.tr(k);
 
   @override
   void initState() {
     super.initState();
+    _bgCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200));
+    _contentCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900));
 
-    _fadeController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-
-    _fadeAnimation = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeIn,
-    );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
+    _bgAnim = CurvedAnimation(parent: _bgCtrl, curve: Curves.easeIn);
+    _fadeAnim = CurvedAnimation(parent: _contentCtrl, curve: Curves.easeOut);
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.25),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOut,
-    ));
+    ).animate(CurvedAnimation(parent: _contentCtrl, curve: Curves.easeOut));
 
-    _fadeController.forward();
-    _slideController.forward();
+    _bgCtrl.forward();
+    Future.delayed(
+        const Duration(milliseconds: 300), () => _contentCtrl.forward());
 
-    fetchStats();
+    _loadSettings();
+    _fetchStats();
   }
 
-  Future<void> fetchStats() async {
+  Future<void> _loadSettings() async {
+    await SettingsManager.load();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _fetchStats() async {
     try {
-      final reportsSnap =
+      final rSnap =
           await FirebaseFirestore.instance.collection('reports').get();
-
-      print("✅ عدد البلاغات: ${reportsSnap.docs.length}");
-
-      final solved = reportsSnap.docs.where((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        final status = data['status'] ?? '';
-        return status == 'completed' || status == 'done';
+      final solved = rSnap.docs.where((d) {
+        final s = (d.data())['status'] ?? '';
+        return s == 'completed' || s == 'done';
       }).length;
-
-      final workersSnap = await FirebaseFirestore.instance
+      final wSnap = await FirebaseFirestore.instance
           .collection('users')
           .where('role', isEqualTo: 'worker')
           .get();
-
-      print("✅ عدد العمال: ${workersSnap.docs.length}");
-
       setState(() {
-        totalReports = reportsSnap.docs.length;
+        totalReports = rSnap.docs.length;
         solvedReports = solved;
-        activeWorkers = workersSnap.docs.length;
-        isLoading = false;
+        activeWorkers = wSnap.docs.length;
+        _statsLoaded = true;
       });
-    } catch (e) {
-      print("❌ خطأ في fetchStats: $e");
-      setState(() => isLoading = false);
+    } catch (_) {
+      setState(() => _statsLoaded = true);
     }
   }
 
   @override
   void dispose() {
-    _fadeController.dispose();
-    _slideController.dispose();
+    _bgCtrl.dispose();
+    _contentCtrl.dispose();
     super.dispose();
   }
 
-  Widget buildStatCard(String value, String label, IconData icon, Color color) {
-    return Container(
-      width: 100,
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.3)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 30),
+  // ── Stat card ─────────────────────────────────
+  Widget _statCard(String value, String label, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+        decoration: BoxDecoration(
+          color: _C.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withOpacity(0.25)),
+          boxShadow: [
+            BoxShadow(
+                color: color.withOpacity(0.12),
+                blurRadius: 16,
+                offset: const Offset(0, 6)),
+          ],
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: color.withOpacity(0.3)),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
           const SizedBox(height: 10),
           Text(
-            isLoading ? "..." : value,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            textAlign: TextAlign.center,
+            _statsLoaded ? value : '…',
             style: TextStyle(
-              fontSize: 12,
-              color: Colors.white.withOpacity(0.85),
-            ),
+                color: color,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5),
           ),
-        ],
+          const SizedBox(height: 5),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: _C.textSub, fontSize: 11)),
+        ]),
       ),
     );
   }
@@ -129,147 +151,172 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF1A237E),
-              Color(0xFF4A90E2),
-              Color(0xFF357ABD),
-            ],
+      backgroundColor: _C.navy,
+      body: FadeTransition(
+        opacity: _bgAnim,
+        child: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(0, -0.6),
+              radius: 1.4,
+              colors: [
+                _C.blue.withOpacity(0.18),
+                _C.navy,
+              ],
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
+          child: SafeArea(
             child: SlideTransition(
-              position: _slideAnimation,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 30),
+              position: _slideAnim,
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 26, vertical: 20),
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 30),
 
-                    // App Icon
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: Colors.white.withOpacity(0.4), width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.eco,
-                        size: 50,
-                        color: Colors.white,
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // App Name
-                    const Text(
-                      "بلاغي",
-                      style: TextStyle(
-                        fontSize: 42,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 2,
-                      ),
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // Slogan
-                    Text(
-                      "مدينتك بيدك — بلّغ، تابع، غيّر",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white.withOpacity(0.9),
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-
-                    const SizedBox(height: 50),
-
-                    // Stats Title
-                    Text(
-                      "أثر حقيقي على أرض الواقع",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white.withOpacity(0.95),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Stats Cards
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        buildStatCard(
-                          "$totalReports",
-                          "بلاغ\nمُرسَل",
-                          Icons.report,
-                          const Color(0xFFFFD54F),
+                      // ── Logo ──
+                      Container(
+                        width: 96,
+                        height: 96,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [_C.blue, _C.accent],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                                color: _C.blue.withOpacity(0.45),
+                                blurRadius: 30,
+                                offset: const Offset(0, 10)),
+                          ],
                         ),
-                        buildStatCard(
-                          "$solvedReports",
-                          "بلاغ\nمُحَلّ",
-                          Icons.check_circle,
-                          const Color(0xFF69F0AE),
-                        ),
-                        buildStatCard(
-                          "$activeWorkers",
-                          "عامل\nنشيط",
-                          Icons.engineering,
-                          const Color(0xFF80D8FF),
-                        ),
-                      ],
-                    ),
+                        child: const Icon(Icons.eco_rounded,
+                            size: 48, color: Colors.white),
+                      ),
 
-                    const SizedBox(height: 60),
+                      const SizedBox(height: 24),
 
-                    // Start Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 58,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const CitizenScreen()),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: const Color(0xFF1A237E),
-                          elevation: 8,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
+                      // ── App name ──
+                      Text(
+                        tr('welcomeTitle'),
+                        style: const TextStyle(
+                          color: _C.textPrimary,
+                          fontSize: 44,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // ── Slogan ──
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _C.accent.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(color: _C.accent.withOpacity(0.2)),
+                        ),
+                        child: Text(
+                          tr('welcomeSlogan'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              color: _C.accent,
+                              fontSize: 13,
+                              fontStyle: FontStyle.italic),
+                        ),
+                      ),
+
+                      const SizedBox(height: 48),
+
+                      // ── Impact label ──
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(width: 30, height: 1, color: _C.divider),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Text(tr('welcomeImpact'),
+                                style: const TextStyle(
+                                    color: _C.textSub,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500)),
+                          ),
+                          Container(width: 30, height: 1, color: _C.divider),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // ── Stats ──
+                      Row(
+                        children: [
+                          _statCard('$totalReports', tr('totalReports'),
+                              Icons.bar_chart_rounded, _C.blue),
+                          const SizedBox(width: 10),
+                          _statCard('$solvedReports', tr('solvedReports'),
+                              Icons.check_circle_rounded, _C.green),
+                          const SizedBox(width: 10),
+                          _statCard('$activeWorkers', tr('activeWorkers'),
+                              Icons.engineering_rounded, _C.orange),
+                        ],
+                      ),
+
+                      const SizedBox(height: 56),
+
+                      // ── CTA button ──
+                      GestureDetector(
+                        onTap: () => Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const HomeScreen()),
+                        ),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [_C.blue, _C.blueSoft],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                  color: _C.blue.withOpacity(0.45),
+                                  blurRadius: 22,
+                                  offset: const Offset(0, 8)),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                tr('startNow'),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(width: 10),
+                              const Icon(Icons.rocket_launch_rounded,
+                                  color: Colors.white, size: 20),
+                            ],
                           ),
                         ),
-                        child: const Text(
-                          "ابدأ الآن 🚀",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
                       ),
-                    ),
 
-                    const SizedBox(height: 30),
-                  ],
+                      const SizedBox(height: 30),
+                    ],
+                  ),
                 ),
               ),
             ),

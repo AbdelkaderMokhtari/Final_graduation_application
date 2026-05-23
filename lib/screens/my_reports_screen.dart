@@ -8,10 +8,8 @@ class _C {
   static const navy = Color(0xFF0A1628);
   static const navyMid = Color(0xFF0F2044);
   static const blue = Color(0xFF1E6FFF);
-  static const accent = Color(0xFF00E5FF);
   static const orange = Color(0xFFFF8C42);
   static const green = Color(0xFF00D68F);
-  static const red = Color(0xFFFF4D6A);
   static const card = Color(0xFF162040);
   static const card2 = Color(0xFF1A2848);
   static const divider = Color(0xFF1E2E50);
@@ -37,7 +35,22 @@ class MyReportsScreen extends StatelessWidget {
   }
 
   String _formatDate(DateTime d) =>
-      '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
+      '${d.year}/${d.month.toString().padLeft(2, '0')}/'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  // ✅ ترتيب يدوي بالوقت — بدون orderBy في الـ query
+  List<DocumentSnapshot> _sorted(List<DocumentSnapshot> docs) {
+    final sorted = List<DocumentSnapshot>.from(docs);
+    sorted.sort((a, b) {
+      final aData = a.data() as Map<String, dynamic>;
+      final bData = b.data() as Map<String, dynamic>;
+      final aTime = aData['timestamp'] as Timestamp?;
+      final bTime = bData['timestamp'] as Timestamp?;
+      if (aTime == null || bTime == null) return 0;
+      return bTime.compareTo(aTime);
+    });
+    return sorted;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,9 +67,9 @@ class MyReportsScreen extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: _C.blue.withOpacity(0.15),
+              color: _C.blue.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: _C.blue.withOpacity(0.3)),
+              border: Border.all(color: _C.blue.withValues(alpha: 0.3)),
             ),
             child: const Icon(Icons.list_alt_rounded, color: _C.blue, size: 16),
           ),
@@ -80,16 +93,37 @@ class MyReportsScreen extends StatelessWidget {
           ? const Center(
               child: Text('غير مسجل', style: TextStyle(color: _C.textSub)))
           : StreamBuilder<QuerySnapshot>(
+              // ✅ بدون orderBy — نرتب يدوياً
               stream: FirebaseFirestore.instance
                   .collection('reports')
                   .where('userId', isEqualTo: uid)
-                  .orderBy('timestamp', descending: true)
                   .snapshots(),
               builder: (ctx, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
                   return const Center(
                       child: CircularProgressIndicator(color: _C.blue));
                 }
+
+                // ✅ طباعة الخطأ للـ debug
+                if (snap.hasError) {
+                  debugPrint('MyReports error: ${snap.error}');
+                  return Center(
+                    child:
+                        Column(mainAxisSize: MainAxisSize.min, children: const [
+                      Icon(Icons.wifi_off_rounded, color: _C.textSub, size: 48),
+                      SizedBox(height: 12),
+                      Text('تعذّر تحميل البلاغات',
+                          style: TextStyle(
+                              color: _C.textPrimary,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold)),
+                      SizedBox(height: 6),
+                      Text('تحقق من اتصال الإنترنت',
+                          style: TextStyle(color: _C.textSub, fontSize: 13)),
+                    ]),
+                  );
+                }
+
                 if (!snap.hasData || snap.data!.docs.isEmpty) {
                   return Center(
                     child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -117,7 +151,9 @@ class MyReportsScreen extends StatelessWidget {
                   );
                 }
 
-                final docs = snap.data!.docs;
+                // ✅ ترتيب يدوي
+                final docs = _sorted(snap.data!.docs);
+
                 return ListView.builder(
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.all(20),
@@ -144,7 +180,7 @@ class MyReportsScreen extends StatelessWidget {
                           border: Border.all(color: _C.divider),
                           boxShadow: [
                             BoxShadow(
-                                color: meta.color.withOpacity(0.06),
+                                color: meta.color.withValues(alpha: 0.06),
                                 blurRadius: 16,
                                 offset: const Offset(0, 5)),
                           ],
@@ -156,7 +192,7 @@ class MyReportsScreen extends StatelessWidget {
                             decoration: BoxDecoration(
                               gradient: LinearGradient(colors: [
                                 meta.color,
-                                meta.color.withOpacity(0.15)
+                                meta.color.withValues(alpha: 0.15)
                               ]),
                               borderRadius: const BorderRadius.vertical(
                                   top: Radius.circular(20)),
@@ -213,12 +249,13 @@ class MyReportsScreen extends StatelessWidget {
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 8, vertical: 3),
                                           decoration: BoxDecoration(
-                                            color: meta.color.withOpacity(0.1),
+                                            color: meta.color
+                                                .withValues(alpha: 0.1),
                                             borderRadius:
                                                 BorderRadius.circular(7),
                                             border: Border.all(
                                                 color: meta.color
-                                                    .withOpacity(0.25)),
+                                                    .withValues(alpha: 0.25)),
                                           ),
                                           child: Row(
                                               mainAxisSize: MainAxisSize.min,

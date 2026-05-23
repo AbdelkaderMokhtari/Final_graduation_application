@@ -1,23 +1,21 @@
-// welcome_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+
 import 'settings_manager.dart';
 import 'homescreen.dart';
-import 'settings_manager.dart';
 
 // ─────────────────────────────────────────────
 // 🎨 Design Tokens
 // ─────────────────────────────────────────────
 class _C {
   static const navy = Color(0xFF0A1628);
-  static const navyMid = Color(0xFF0F2044);
   static const blue = Color(0xFF1E6FFF);
   static const blueSoft = Color(0xFF4A90E2);
   static const accent = Color(0xFF00E5FF);
   static const orange = Color(0xFFFF8C42);
   static const green = Color(0xFF00D68F);
   static const card = Color(0xFF162040);
-  static const card2 = Color(0xFF1A2848);
   static const divider = Color(0xFF1E2E50);
   static const textPrimary = Color(0xFFE8F0FF);
   static const textSub = Color(0xFF8899BB);
@@ -48,6 +46,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   void initState() {
     super.initState();
+
     _bgCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 1200));
     _contentCtrl = AnimationController(
@@ -103,7 +102,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.dispose();
   }
 
-  // ── Stat card ─────────────────────────────────
+  // ── Stat Card ─────────────────────────────────
   Widget _statCard(String value, String label, IconData icon, Color color) {
     return Expanded(
       child: Container(
@@ -111,10 +110,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         decoration: BoxDecoration(
           color: _C.card,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withOpacity(0.25)),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
           boxShadow: [
             BoxShadow(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha: 0.12),
                 blurRadius: 16,
                 offset: const Offset(0, 6)),
           ],
@@ -124,9 +123,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.14),
+              color: color.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(color: color.withOpacity(0.3)),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
             ),
             child: Icon(icon, color: color, size: 22),
           ),
@@ -148,6 +147,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     );
   }
 
+  // ── Build ─────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -162,7 +162,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               center: const Alignment(0, -0.6),
               radius: 1.4,
               colors: [
-                _C.blue.withOpacity(0.18),
+                _C.blue.withValues(alpha: 0.18),
                 _C.navy,
               ],
             ),
@@ -180,7 +180,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     children: [
                       const SizedBox(height: 30),
 
-                      // ── Logo ──
+                      // ── Logo ✅ هنا الشعار في مكانه الصحيح ──
                       Container(
                         width: 96,
                         height: 96,
@@ -193,13 +193,19 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                                color: _C.blue.withOpacity(0.45),
+                                color: _C.blue.withValues(alpha: 0.45),
                                 blurRadius: 30,
                                 offset: const Offset(0, 10)),
                           ],
                         ),
-                        child: const Icon(Icons.eco_rounded,
-                            size: 48, color: Colors.white),
+                        child: ClipOval(
+                          child: SvgPicture.asset(
+                            'assets/images/eco_city.svg',
+                            width: 96,
+                            height: 96,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 24),
@@ -222,9 +228,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(
-                          color: _C.accent.withOpacity(0.08),
+                          color: _C.accent.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: _C.accent.withOpacity(0.2)),
+                          border: Border.all(
+                              color: _C.accent.withValues(alpha: 0.2)),
                         ),
                         child: Text(
                           tr('welcomeSlogan'),
@@ -258,22 +265,20 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                       const SizedBox(height: 20),
 
                       // ── Stats ──
-                      Row(
-                        children: [
-                          _statCard('$totalReports', tr('totalReports'),
-                              Icons.bar_chart_rounded, _C.blue),
-                          const SizedBox(width: 10),
-                          _statCard('$solvedReports', tr('solvedReports'),
-                              Icons.check_circle_rounded, _C.green),
-                          const SizedBox(width: 10),
-                          _statCard('$activeWorkers', tr('activeWorkers'),
-                              Icons.engineering_rounded, _C.orange),
-                        ],
-                      ),
+                      Row(children: [
+                        _statCard('$totalReports', tr('totalReports'),
+                            Icons.bar_chart_rounded, _C.blue),
+                        const SizedBox(width: 10),
+                        _statCard('$solvedReports', tr('solvedReports'),
+                            Icons.check_circle_rounded, _C.green),
+                        const SizedBox(width: 10),
+                        _statCard('$activeWorkers', tr('activeWorkers'),
+                            Icons.engineering_rounded, _C.orange),
+                      ]),
 
                       const SizedBox(height: 56),
 
-                      // ── CTA button ──
+                      // ── CTA Button ──
                       GestureDetector(
                         onTap: () => Navigator.pushReplacement(
                           context,
@@ -291,7 +296,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                  color: _C.blue.withOpacity(0.45),
+                                  color: _C.blue.withValues(alpha: 0.45),
                                   blurRadius: 22,
                                   offset: const Offset(0, 8)),
                             ],

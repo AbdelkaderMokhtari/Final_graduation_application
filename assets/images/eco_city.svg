@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="ecoTechGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0066FF" />
+      <stop offset="40%" stop-color="#00B4D8" />
+      <stop offset="100%" stop-color="#2ECC71" />
+    </linearGradient>
+    <filter id="subtleShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <drop-shadow dx="0" dy="8" stdDeviation="6" flood-color="#1E293B" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <circle cx="250" cy="250" r="220" fill="#FFFFFF" filter="url(#subtleShadow)" />
+
+  <g transform="translate(0, -15)">
+    <path d="M250,90 C170,90 120,145 120,220 C120,305 220,395 250,410 C280,395 380,305 380,220 C380,145 330,90 250,90 Z 
+             M250,135 C300,135 335,170 335,220 C335,270 290,325 250,365 C210,325 165,270 165,220 C165,170 200,135 250,135 Z" 
+          fill="url(#ecoTechGrad)" />
+          
+    <path d="M250,165 C280,165 295,195 285,230 C275,265 250,310 250,310 C250,310 230,260 225,235 C220,210 230,165 250,165 Z" 
+          fill="#2ECC71" />
+          
+    <path d="M250,165 Q248,230 250,310" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" fill="none" opacity="0.8"/>
+  </g>
+
+  <text x="250" y="445" text-anchor="middle" font-family="'Poppins', 'Montserrat', 'Inter', sans-serif" font-size="36" font-weight="800" letter-spacing="1">
+    <tspan fill="#2ECC71">Eco</tspan><tspan fill="#0066FF">City</tspan>
+  </text>
+</svg>

@@ -6,24 +6,26 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/notification_service.dart';
+
 // ─────────────────────────────────────────────
 // 🎨 Design Tokens
 // ─────────────────────────────────────────────
 class _C {
-  static const navy        = Color(0xFF0A1628);
-  static const navyMid     = Color(0xFF0F2044);
-  static const blue        = Color(0xFF1E6FFF);
-  static const blueSoft    = Color(0xFF4A90E2);
-  static const accent      = Color(0xFF00E5FF);
-  static const orange      = Color(0xFFFF8C42);
-  static const green       = Color(0xFF00D68F);
-  static const red         = Color(0xFFFF4D6A);
-  static const purple      = Color(0xFF8B5CF6);
-  static const card        = Color(0xFF162040);
-  static const card2       = Color(0xFF1A2848);
-  static const divider     = Color(0xFF1E2E50);
+  static const navy = Color(0xFF0A1628);
+  static const navyMid = Color(0xFF0F2044);
+  static const blue = Color(0xFF1E6FFF);
+  static const blueSoft = Color(0xFF4A90E2);
+  static const accent = Color(0xFF00E5FF);
+  static const orange = Color(0xFFFF8C42);
+  static const green = Color(0xFF00D68F);
+  static const red = Color(0xFFFF4D6A);
+  static const purple = Color(0xFF8B5CF6);
+  static const card = Color(0xFF162040);
+  static const card2 = Color(0xFF1A2848);
+  static const divider = Color(0xFF1E2E50);
   static const textPrimary = Color(0xFFE8F0FF);
-  static const textSub     = Color(0xFF8899BB);
+  static const textSub = Color(0xFF8899BB);
 }
 
 class WorkerScreen extends StatefulWidget {
@@ -39,6 +41,10 @@ class _WorkerScreenState extends State<WorkerScreen>
 
   late AnimationController _animCtrl;
   late Animation<double> _fadeAnim;
+
+  // ── لتتبع المهام السابقة باش نكتشف الجديدة ──
+  final Set<String> _knownTaskIds = {};
+  bool _firstLoad = true;
 
   @override
   void initState() {
@@ -73,13 +79,13 @@ class _WorkerScreenState extends State<WorkerScreen>
         .pickImage(source: ImageSource.camera, imageQuality: 50);
     if (picked == null) return;
 
-    final bytes  = await File(picked.path).readAsBytes();
+    final bytes = await File(picked.path).readAsBytes();
     final base64 = base64Encode(bytes);
 
     await FirebaseFirestore.instance.collection('reports').doc(id).update({
       'afterImageBase64': base64,
-      'status':           'completed',
-      'completedAt':      FieldValue.serverTimestamp(),
+      'status': 'completed',
+      'completedAt': FieldValue.serverTimestamp(),
     });
 
     if (mounted) {
@@ -94,10 +100,35 @@ class _WorkerScreenState extends State<WorkerScreen>
   }
 
   Future<void> _openMap(double lat, double lng) async {
-    final uri = Uri.parse(
-        'https://www.google.com/maps/search/?api=1&query=$lat,$lng');
+    final uri =
+        Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // ── 🔔 فحص المهام الجديدة وإرسال notification ──
+  void _checkNewTasks(List<DocumentSnapshot> docs) {
+    // أول تحميل — نسجل المهام الموجودة بدون notification
+    if (_firstLoad) {
+      for (final doc in docs) {
+        _knownTaskIds.add(doc.id);
+      }
+      _firstLoad = false;
+      return;
+    }
+
+    // تحقق من المهام الجديدة
+    for (final doc in docs) {
+      if (!_knownTaskIds.contains(doc.id)) {
+        _knownTaskIds.add(doc.id);
+        final data = doc.data() as Map<String, dynamic>;
+        // أرسل notification
+        NotificationService().notifyWorker(
+          description: data['description'] ?? 'مهمة جديدة',
+          category: data['category'] ?? '',
+        );
+      }
     }
   }
 
@@ -105,18 +136,18 @@ class _WorkerScreenState extends State<WorkerScreen>
   _StatusMeta _meta(String status) {
     switch (status) {
       case 'in_progress':
-        return _StatusMeta(_C.blue,   Icons.autorenew_rounded,    'قيد المعالجة');
+        return _StatusMeta(_C.blue, Icons.autorenew_rounded, 'قيد المعالجة');
       case 'completed':
-        return _StatusMeta(_C.green,  Icons.check_circle_rounded,  'منجز');
+        return _StatusMeta(_C.green, Icons.check_circle_rounded, 'منجز');
       default:
-        return _StatusMeta(_C.orange, Icons.engineering_rounded,   'مسندة');
+        return _StatusMeta(_C.orange, Icons.engineering_rounded, 'مسندة');
     }
   }
 
   // ── Task Card ─────────────────────────────────
   Widget _taskCard(int idx, DocumentSnapshot doc, Map<String, dynamic> data) {
     final status = data['status'] ?? 'assigned';
-    final meta   = _meta(status);
+    final meta = _meta(status);
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -124,7 +155,8 @@ class _WorkerScreenState extends State<WorkerScreen>
       curve: Curves.easeOut,
       builder: (_, v, child) => Opacity(
         opacity: v,
-        child: Transform.translate(offset: Offset(0, 22 * (1 - v)), child: child),
+        child:
+            Transform.translate(offset: Offset(0, 22 * (1 - v)), child: child),
       ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 14),
@@ -134,8 +166,9 @@ class _WorkerScreenState extends State<WorkerScreen>
           border: Border.all(color: _C.divider),
           boxShadow: [
             BoxShadow(
-              color: meta.color.withOpacity(0.07),
-              blurRadius: 20, offset: const Offset(0, 6),
+              color: meta.color.withValues(alpha: 0.07),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
@@ -145,7 +178,7 @@ class _WorkerScreenState extends State<WorkerScreen>
             height: 3,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                  colors: [meta.color, meta.color.withOpacity(0.15)]),
+                  colors: [meta.color, meta.color.withValues(alpha: 0.15)]),
               borderRadius:
                   const BorderRadius.vertical(top: Radius.circular(22)),
             ),
@@ -153,16 +186,18 @@ class _WorkerScreenState extends State<WorkerScreen>
 
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // ── Status badge row
               Row(children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: meta.color.withOpacity(0.12),
+                    color: meta.color.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: meta.color.withOpacity(0.3)),
+                    border:
+                        Border.all(color: meta.color.withValues(alpha: 0.3)),
                   ),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(meta.icon, color: meta.color, size: 13),
@@ -175,9 +210,9 @@ class _WorkerScreenState extends State<WorkerScreen>
                   ]),
                 ),
                 const Spacer(),
-                // Task number
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: _C.card2,
                     borderRadius: BorderRadius.circular(8),
@@ -197,23 +232,30 @@ class _WorkerScreenState extends State<WorkerScreen>
                   child: Stack(children: [
                     Image.memory(
                       base64Decode(data['beforeImageBase64']),
-                      height: 180, width: double.infinity, fit: BoxFit.cover,
+                      height: 180,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
                     ),
                     Positioned(
-                      top: 8, left: 8,
+                      top: 8,
+                      left: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _C.navy.withOpacity(0.7),
+                          color: _C.navy.withValues(alpha: 0.7),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.photo_camera_rounded,
-                              color: _C.textSub, size: 12),
-                          SizedBox(width: 4),
-                          Text('قبل', style: TextStyle(color: _C.textSub, fontSize: 10)),
-                        ]),
+                        child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.photo_camera_rounded,
+                                  color: _C.textSub, size: 12),
+                              SizedBox(width: 4),
+                              Text('قبل',
+                                  style: TextStyle(
+                                      color: _C.textSub, fontSize: 10)),
+                            ]),
                       ),
                     ),
                   ]),
@@ -258,9 +300,10 @@ class _WorkerScreenState extends State<WorkerScreen>
                     ),
                     child: Row(children: [
                       Container(
-                        width: 30, height: 30,
+                        width: 30,
+                        height: 30,
                         decoration: BoxDecoration(
-                          color: _C.red.withOpacity(0.12),
+                          color: _C.red.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Icon(Icons.location_on_rounded,
@@ -315,11 +358,11 @@ class _WorkerScreenState extends State<WorkerScreen>
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           gradient: LinearGradient(colors: [
-            color.withOpacity(0.22),
-            color.withOpacity(0.07),
+            color.withValues(alpha: 0.22),
+            color.withValues(alpha: 0.07),
           ]),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: color.withOpacity(0.4)),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(icon, color: color, size: 20),
@@ -333,20 +376,20 @@ class _WorkerScreenState extends State<WorkerScreen>
   }
 
   Widget _tag(String label, Color color, IconData icon) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(
-      color: color.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: color.withOpacity(0.25)),
-    ),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, color: color, size: 12),
-      const SizedBox(width: 5),
-      Text(label,
-          style: TextStyle(
-              color: color, fontSize: 11, fontWeight: FontWeight.bold)),
-    ]),
-  );
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, color: color, size: 12),
+          const SizedBox(width: 5),
+          Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        ]),
+      );
 
   // ── Build ─────────────────────────────────────
   @override
@@ -368,7 +411,8 @@ class _WorkerScreenState extends State<WorkerScreen>
         iconTheme: const IconThemeData(color: _C.textPrimary),
         title: Row(children: [
           Container(
-            width: 34, height: 34,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               gradient: const LinearGradient(colors: [_C.blue, _C.accent]),
               borderRadius: BorderRadius.circular(10),
@@ -383,8 +427,7 @@ class _WorkerScreenState extends State<WorkerScreen>
                     color: _C.textPrimary,
                     fontSize: 15,
                     fontWeight: FontWeight.bold)),
-            Text('My Tasks',
-                style: TextStyle(color: _C.textSub, fontSize: 10)),
+            Text('My Tasks', style: TextStyle(color: _C.textSub, fontSize: 10)),
           ]),
         ]),
         actions: [
@@ -405,8 +448,8 @@ class _WorkerScreenState extends State<WorkerScreen>
           stream: FirebaseFirestore.instance
               .collection('reports')
               .where('assignedTo', isEqualTo: currentUser!.uid)
-              .where('status', whereIn: ['assigned', 'in_progress'])
-              .snapshots(),
+              .where('status',
+                  whereIn: ['assigned', 'in_progress']).snapshots(),
           builder: (ctx, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
               return const Center(
@@ -416,7 +459,8 @@ class _WorkerScreenState extends State<WorkerScreen>
               return Center(
                 child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Container(
-                    width: 80, height: 80,
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
                       color: _C.card,
                       shape: BoxShape.circle,
@@ -439,12 +483,16 @@ class _WorkerScreenState extends State<WorkerScreen>
             }
 
             final docs = snap.data!.docs;
+
+            // 🔔 فحص المهام الجديدة
+            _checkNewTasks(docs);
+
             return ListView.builder(
               physics: const BouncingScrollPhysics(),
               padding: const EdgeInsets.all(20),
               itemCount: docs.length,
               itemBuilder: (ctx, i) {
-                final doc  = docs[i];
+                final doc = docs[i];
                 final data = doc.data() as Map<String, dynamic>;
                 return _taskCard(i, doc, data);
               },

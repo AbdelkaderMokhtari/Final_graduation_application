@@ -6,6 +6,8 @@ import 'create_worker_request_screen.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../services/notification_service.dart';
+
 // ─────────────────────────────────────────────
 // 🎨 Design Tokens
 // ─────────────────────────────────────────────
@@ -19,7 +21,6 @@ class _C {
   static const green = Color(0xFF00D68F);
   static const red = Color(0xFFFF4D6A);
   static const purple = Color(0xFF8B5CF6);
-  static const surface = Color(0xFF111D35);
   static const card = Color(0xFF162040);
   static const card2 = Color(0xFF1A2848);
   static const divider = Color(0xFF1E2E50);
@@ -46,6 +47,10 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
 
   final List<String> categories = ["الكل", "نفايات", "إنارة", "طرقات"];
   final List<String> wasteTypes = ["الكل", "بلاستيك", "زجاج", "عضوي", "معادن"];
+
+  // ── 🔔 لتتبع البلاغات الجديدة ──────────────
+  final Set<String> _knownReportIds = {};
+  bool _firstReportLoad = true;
 
   @override
   void initState() {
@@ -87,6 +92,32 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
   }
 
   // ─────────────────────────────────────────────
+  // 🔔 فحص البلاغات الجديدة وإرسال notification
+  // ─────────────────────────────────────────────
+  void _checkNewReports(List<DocumentSnapshot> docs) {
+    // أول تحميل — سجل الموجودين بدون notification
+    if (_firstReportLoad) {
+      for (final doc in docs) {
+        _knownReportIds.add(doc.id);
+      }
+      _firstReportLoad = false;
+      return;
+    }
+
+    // تحقق من البلاغات الجديدة
+    for (final doc in docs) {
+      if (!_knownReportIds.contains(doc.id)) {
+        _knownReportIds.add(doc.id);
+        final data = doc.data() as Map<String, dynamic>;
+        NotificationService().notifyAdmin(
+          description: data['description'] ?? 'بلاغ جديد',
+          category: data['category'] ?? '',
+        );
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // 📊 TAB 1 — Statistics
   // ─────────────────────────────────────────────
   Widget _buildStats() {
@@ -96,6 +127,10 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
         if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator(color: _C.blue));
         }
+
+        // 🔔 فحص البلاغات الجديدة
+        _checkNewReports(snap.data!.docs);
+
         final docs = snap.data!.docs;
         final total = docs.length;
         final pending = docs.where((d) => d['status'] == 'pending').length;
@@ -141,30 +176,30 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
                   border: Border.all(color: _C.divider),
                   boxShadow: [
                     BoxShadow(
-                      color: it.color.withOpacity(0.07),
+                      color: it.color.withValues(alpha: 0.07),
                       blurRadius: 20,
                       offset: const Offset(0, 6),
                     ),
                   ],
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [
-                          it.color.withOpacity(0.25),
-                          it.color.withOpacity(0.08),
-                        ]),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: it.color.withOpacity(0.3)),
-                      ),
-                      child: Icon(it.icon, color: it.color, size: 26),
+                child: Row(children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [
+                        it.color.withValues(alpha: 0.25),
+                        it.color.withValues(alpha: 0.08),
+                      ]),
+                      borderRadius: BorderRadius.circular(14),
+                      border:
+                          Border.all(color: it.color.withValues(alpha: 0.3)),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
+                    child: Icon(it.icon, color: it.color, size: 26),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(it.labelEn,
@@ -176,19 +211,17 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
                                   color: _C.textPrimary,
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      '${it.value}',
-                      style: TextStyle(
-                          color: it.color,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -1),
-                    ),
-                  ],
-                ),
+                        ]),
+                  ),
+                  Text(
+                    '${it.value}',
+                    style: TextStyle(
+                        color: it.color,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -1),
+                  ),
+                ]),
               ),
             );
           },
@@ -201,81 +234,78 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
   // 📋 TAB 2 — Reports
   // ─────────────────────────────────────────────
   Widget _buildReports() {
-    return Column(
-      children: [
-        // Filter row
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-          child: Row(
-            children: [
-              Expanded(
-                  child: _filterDropdown(
-                value: selectedCategory,
-                items: categories,
-                icon: Icons.category_rounded,
-                color: _C.purple,
-                onChanged: (v) => setState(() => selectedCategory = v!),
-              )),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: _filterDropdown(
-                value: selectedWasteType,
-                items: wasteTypes,
-                icon: Icons.recycling_rounded,
-                color: _C.green,
-                onChanged: (v) => setState(() => selectedWasteType = v!),
-              )),
-            ],
-          ),
-        ),
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+        child: Row(children: [
+          Expanded(
+              child: _filterDropdown(
+            value: selectedCategory,
+            items: categories,
+            icon: Icons.category_rounded,
+            color: _C.purple,
+            onChanged: (v) => setState(() => selectedCategory = v!),
+          )),
+          const SizedBox(width: 10),
+          Expanded(
+              child: _filterDropdown(
+            value: selectedWasteType,
+            items: wasteTypes,
+            icon: Icons.recycling_rounded,
+            color: _C.green,
+            onChanged: (v) => setState(() => selectedWasteType = v!),
+          )),
+        ]),
+      ),
+      Expanded(
+        child: StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('reports')
+              .orderBy('timestamp', descending: true)
+              .snapshots(),
+          builder: (ctx, snap) {
+            if (!snap.hasData) {
+              return const Center(
+                  child: CircularProgressIndicator(color: _C.blue));
+            }
 
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('reports')
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (ctx, snap) {
-              if (!snap.hasData) {
-                return const Center(
-                    child: CircularProgressIndicator(color: _C.blue));
-              }
-              final docs = snap.data!.docs.where((doc) {
-                final d = doc.data() as Map<String, dynamic>;
-                final matchCat = selectedCategory == "الكل" ||
-                    d['category'] == selectedCategory;
-                final matchWaste = selectedWasteType == "الكل" ||
-                    d['wasteType'] == selectedWasteType;
-                return matchCat && matchWaste;
-              }).toList();
+            // 🔔 فحص البلاغات الجديدة أيضاً من تاب الريبورتس
+            _checkNewReports(snap.data!.docs);
 
-              if (docs.isEmpty) {
-                return Center(
-                  child:
-                      Column(mainAxisSize: MainAxisSize.min, children: const [
-                    Icon(Icons.inbox_rounded, color: _C.textSub, size: 48),
-                    SizedBox(height: 12),
-                    Text('لا توجد تقارير',
-                        style: TextStyle(color: _C.textSub, fontSize: 15)),
-                  ]),
-                );
-              }
+            final docs = snap.data!.docs.where((doc) {
+              final d = doc.data() as Map<String, dynamic>;
+              final matchCat = selectedCategory == "الكل" ||
+                  d['category'] == selectedCategory;
+              final matchWaste = selectedWasteType == "الكل" ||
+                  d['wasteType'] == selectedWasteType;
+              return matchCat && matchWaste;
+            }).toList();
 
-              return ListView.builder(
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: docs.length,
-                itemBuilder: (ctx, i) {
-                  final doc = docs[i];
-                  final data = doc.data() as Map<String, dynamic>;
-                  return _reportCard(i, doc.id, data);
-                },
+            if (docs.isEmpty) {
+              return Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: const [
+                  Icon(Icons.inbox_rounded, color: _C.textSub, size: 48),
+                  SizedBox(height: 12),
+                  Text('لا توجد تقارير',
+                      style: TextStyle(color: _C.textSub, fontSize: 15)),
+                ]),
               );
-            },
-          ),
+            }
+
+            return ListView.builder(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: docs.length,
+              itemBuilder: (ctx, i) {
+                final doc = docs[i];
+                final data = doc.data() as Map<String, dynamic>;
+                return _reportCard(i, doc.id, data);
+              },
+            );
+          },
         ),
-      ],
-    );
+      ),
+    ]);
   }
 
   Widget _filterDropdown({
@@ -337,162 +367,147 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
           border: Border.all(color: _C.divider),
           boxShadow: [
             BoxShadow(
-                color: meta.color.withOpacity(0.06),
+                color: meta.color.withValues(alpha: 0.06),
                 blurRadius: 18,
                 offset: const Offset(0, 5))
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Top bar
-            Container(
-              height: 3,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                    colors: [meta.color, meta.color.withOpacity(0.15)]),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
-              ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                  colors: [meta.color, meta.color.withValues(alpha: 0.15)]),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
-
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Before image
-                  if (data['beforeImageBase64'] != null) ...[
-                    _imageLabel('📷 صورة المواطن'),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Image.memory(
-                        base64Decode(data['beforeImageBase64']),
-                        height: 170,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // After image
-                  if (data['afterImageBase64'] != null) ...[
-                    _imageLabel('🧹 صورة العامل'),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Image.memory(
-                        base64Decode(data['afterImageBase64']),
-                        height: 170,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // Description
-                  Text(
-                    data['description'] ?? '—',
-                    style: const TextStyle(
-                        color: _C.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        height: 1.4),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (data['beforeImageBase64'] != null) ...[
+                _imageLabel('📷 صورة المواطن'),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.memory(
+                    base64Decode(data['beforeImageBase64']),
+                    height: 170,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
                   ),
-                  const SizedBox(height: 8),
+                ),
+                const SizedBox(height: 12),
+              ],
 
-                  // Tags row
-                  Wrap(spacing: 8, runSpacing: 6, children: [
-                    if (data['category'] != null)
-                      _tag(data['category'], _C.purple, Icons.category_rounded),
-                    if (data['wasteType'] != null)
-                      _tag(
-                          data['wasteType'], _C.green, Icons.recycling_rounded),
-                    _tag(meta.label, meta.color, meta.icon),
-                  ]),
-
-                  const SizedBox(height: 14),
-
-                  // Status dropdown
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _C.card2,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _C.divider),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: status,
-                        dropdownColor: _C.card2,
-                        isExpanded: true,
-                        style: const TextStyle(
-                            color: _C.textPrimary, fontSize: 13),
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                            color: _C.textSub, size: 18),
-                        items: const [
-                          DropdownMenuItem(
-                              value: 'pending', child: Text('⏳  معلق')),
-                          DropdownMenuItem(
-                              value: 'assigned', child: Text('👷  مسندة')),
-                          DropdownMenuItem(
-                              value: 'in_progress', child: Text('🔄  جاري')),
-                          DropdownMenuItem(
-                              value: 'completed', child: Text('✅  منجز')),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) _updateStatus(id, v);
-                        },
-                      ),
-                    ),
+              if (data['afterImageBase64'] != null) ...[
+                _imageLabel('🧹 صورة العامل'),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.memory(
+                    base64Decode(data['afterImageBase64']),
+                    height: 170,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
                   ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
-                  const SizedBox(height: 10),
+              Text(data['description'] ?? '—',
+                  style: const TextStyle(
+                      color: _C.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4)),
+              const SizedBox(height: 8),
 
-                  // Assign worker button
-                  GestureDetector(
-                    onTap: () => _showWorkerDialog(id),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [
-                          _C.blue.withOpacity(0.22),
-                          _C.blue.withOpacity(0.07),
-                        ]),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: _C.blue.withOpacity(0.35)),
-                      ),
-                      child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              hasWorker
-                                  ? Icons.edit_rounded
-                                  : Icons.engineering_rounded,
+              Wrap(spacing: 8, runSpacing: 6, children: [
+                if (data['category'] != null)
+                  _tag(data['category'], _C.purple, Icons.category_rounded),
+                if (data['wasteType'] != null)
+                  _tag(data['wasteType'], _C.green, Icons.recycling_rounded),
+                _tag(meta.label, meta.color, meta.icon),
+              ]),
+
+              const SizedBox(height: 14),
+
+              // Status dropdown
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _C.card2,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _C.divider),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: status,
+                    dropdownColor: _C.card2,
+                    isExpanded: true,
+                    style: const TextStyle(color: _C.textPrimary, fontSize: 13),
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: _C.textSub, size: 18),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'pending', child: Text('⏳  معلق')),
+                      DropdownMenuItem(
+                          value: 'assigned', child: Text('👷  مسندة')),
+                      DropdownMenuItem(
+                          value: 'in_progress', child: Text('🔄  جاري')),
+                      DropdownMenuItem(
+                          value: 'completed', child: Text('✅  منجز')),
+                    ],
+                    onChanged: (v) {
+                      if (v != null) _updateStatus(id, v);
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Assign worker button
+              GestureDetector(
+                onTap: () => _showWorkerDialog(id),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [
+                      _C.blue.withValues(alpha: 0.22),
+                      _C.blue.withValues(alpha: 0.07),
+                    ]),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _C.blue.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          hasWorker
+                              ? Icons.edit_rounded
+                              : Icons.engineering_rounded,
+                          color: _C.blue,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          hasWorker ? 'تعديل العامل' : 'تعيين عامل',
+                          style: const TextStyle(
                               color: _C.blue,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              hasWorker ? 'تعديل العامل' : 'تعيين عامل',
-                              style: const TextStyle(
-                                  color: _C.blue,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13),
-                            ),
-                          ]),
-                    ),
-                  ),
-                ],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13),
+                        ),
+                      ]),
+                ),
               ),
-            ),
-          ],
-        ),
+            ]),
+          ),
+        ]),
       ),
     );
   }
@@ -504,9 +519,9 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
   Widget _tag(String label, Color color, IconData icon) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.25)),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, color: color, size: 12),
@@ -544,11 +559,12 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
               onTap: () => _showReportPopup(ctx, data),
               child: Container(
                 decoration: BoxDecoration(
-                  color: meta.color.withOpacity(0.15),
+                  color: meta.color.withValues(alpha: 0.15),
                   shape: BoxShape.circle,
                   border: Border.all(color: meta.color, width: 2),
                   boxShadow: [
-                    BoxShadow(color: meta.color.withOpacity(0.4), blurRadius: 8)
+                    BoxShadow(
+                        color: meta.color.withValues(alpha: 0.4), blurRadius: 8)
                   ],
                 ),
                 child: Icon(meta.icon, color: meta.color, size: 20),
@@ -602,13 +618,12 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
                 Row(children: [
                   Container(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: _C.blue.withOpacity(0.15),
+                      color: _C.blue.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.receipt_long_rounded,
@@ -622,7 +637,6 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
                           fontWeight: FontWeight.bold)),
                 ]),
                 const SizedBox(height: 14),
-
                 if (data['beforeImageBase64'] != null)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(14),
@@ -633,7 +647,6 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
                       fit: BoxFit.cover,
                     ),
                   ),
-
                 const SizedBox(height: 12),
                 _popupRow(Icons.description_rounded, 'الوصف',
                     data['description'] ?? '—', _C.blue),
@@ -645,7 +658,6 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
                 _popupRow(meta.icon, 'الحالة', meta.label, meta.color),
                 _popupRow(
                     Icons.engineering_rounded, 'العامل', workerName, _C.orange),
-
                 const SizedBox(height: 14),
                 GestureDetector(
                   onTap: () => Navigator.pop(ctx),
@@ -689,9 +701,16 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
   }
 
   // ─────────────────────────────────────────────
-  // 👷 Worker Dialog
+  // 👷 Worker Dialog — مع notification للعامل
   // ─────────────────────────────────────────────
   Future<void> _showWorkerDialog(String reportId) async {
+    // جلب بيانات البلاغ لإرسالها في الـ notification
+    final reportDoc = await FirebaseFirestore.instance
+        .collection('reports')
+        .doc(reportId)
+        .get();
+    final reportData = reportDoc.data() as Map<String, dynamic>? ?? {};
+
     showDialog(
       context: context,
       builder: (_) => Dialog(
@@ -708,7 +727,7 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: _C.orange.withOpacity(0.15),
+                      color: _C.orange.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.engineering_rounded,
@@ -747,7 +766,16 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
                           final wid = workers[i].id;
                           return GestureDetector(
                             onTap: () async {
+                              // 1 — إسناد البلاغ للعامل
                               await _assignWorker(reportId, wid);
+
+                              // 2 — 🔔 notification للعامل
+                              NotificationService().notifyWorker(
+                                description:
+                                    reportData['description'] ?? 'مهمة جديدة',
+                                category: reportData['category'] ?? '',
+                              );
+
                               Navigator.pop(ctx);
                             },
                             child: Container(
@@ -811,9 +839,7 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
     );
   }
 
-  // ─────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────
+  // ─── Helpers ─────────────────────────────────
   _StatusMeta _statusMeta(String status) {
     switch (status) {
       case 'assigned':
@@ -827,9 +853,7 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
     }
   }
 
-  // ─────────────────────────────────────────────
-  // Build
-  // ─────────────────────────────────────────────
+  // ─── Build ───────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final pages = [_buildStats(), _buildReports(), _buildMap()];
@@ -841,8 +865,6 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
 
     return Scaffold(
       backgroundColor: _C.navy,
-
-      // ── AppBar ──────────────────────────────
       appBar: AppBar(
         backgroundColor: _C.navyMid,
         elevation: 0,
@@ -885,11 +907,7 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
           child: Container(height: 1, color: _C.divider),
         ),
       ),
-
-      // ── Body ────────────────────────────────
       body: FadeTransition(opacity: _fadeAnim, child: pages[_selectedIndex]),
-
-      // ── Bottom Nav ──────────────────────────
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: _C.navyMid,
@@ -913,13 +931,13 @@ class _AdministrationDashboardState extends State<AdministrationDashboard>
                     decoration: BoxDecoration(
                       gradient: active
                           ? LinearGradient(colors: [
-                              _C.blue.withOpacity(0.25),
-                              _C.blue.withOpacity(0.07),
+                              _C.blue.withValues(alpha: 0.25),
+                              _C.blue.withValues(alpha: 0.07),
                             ])
                           : null,
                       borderRadius: BorderRadius.circular(14),
                       border: active
-                          ? Border.all(color: _C.blue.withOpacity(0.4))
+                          ? Border.all(color: _C.blue.withValues(alpha: 0.4))
                           : null,
                     ),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [

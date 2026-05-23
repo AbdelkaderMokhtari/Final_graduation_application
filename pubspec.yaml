@@ -11,27 +11,52 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Firebase
+  # ── Firebase ──────────────────────────────────
   firebase_core: ^2.27.0
   firebase_auth: ^4.17.0
   cloud_firestore: ^4.15.0
-  # Image & Location
+  cloud_functions: ^4.0.0
+
+  # ── Image & Location ──────────────────────────
   image_picker: ^1.0.7
   geolocator: ^10.1.0
 
-  url_launcher: ^6.2.5
-  fl_chart: ^0.66.0
-  cloud_functions: ^4.0.0
-  # iOS icons
-  cupertino_icons: ^1.0.8
+  # ── Map ───────────────────────────────────────
   flutter_map: ^8.2.2
   latlong2: ^0.9.1
+  url_launcher: ^6.2.5
+
+  # ── Charts ────────────────────────────────────
+  fl_chart: ^0.66.0
+
+  # ── Storage ───────────────────────────────────
   shared_preferences: ^2.5.5
+
+  # ── Notifications ─────────────────────────────
+  flutter_local_notifications: ^17.2.2
+
+  # ── SVG ───────────────────────────────────────
+  flutter_svg: ^2.0.10+1
+
+  # ── UI ────────────────────────────────────────
+  cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 
+  # ── Launcher Icon ─────────────────────────────
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/logo.png"
+  min_sdk_android: 21
+
 flutter:
   uses-material-design: true
+
+  assets:
+    - assets/images/

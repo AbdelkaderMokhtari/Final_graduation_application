@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'firebase_options.dart';
+import 'screens/services/notification_service.dart';
 
 // Screens
 import 'screens/welcome_screen.dart';
@@ -16,9 +17,13 @@ import 'screens/citizen_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ── Firebase ──────────────────────────────────
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // ── Notifications ────────────────────────────
+  await NotificationService().init();
 
   runApp(const MyApp());
 }
@@ -44,7 +49,9 @@ class MyApp extends StatelessWidget {
   }
 }
 
-/// 🔥 النظام الذكي لتحديد الصفحة حسب الدور
+// ─────────────────────────────────────────────
+// 🔥 AuthWrapper — توجيه حسب الدور
+// ─────────────────────────────────────────────
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
@@ -87,9 +94,7 @@ class AuthWrapper extends StatelessWidget {
               return const CitizenScreen();
             }
 
-            final role = data['role'];
-
-            switch (role) {
+            switch (data['role']) {
               case 'admin':
                 return const AdminDashboard();
               case 'administration':
